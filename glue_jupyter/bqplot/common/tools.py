@@ -1,7 +1,7 @@
 from bqplot import PanZoom
 from bqplot.interacts import BrushSelector, BrushIntervalSelector
 from bqplot_image_gl.interacts import BrushEllipseSelector, MouseInteraction
-from glue.core.roi import RectangularROI, RangeROI, CircularROI, EllipticalROI, PolygonalROI
+from glue.core.roi import RectangularROI, RangeROI, CircularROI, EllipticalROI, PolygonalROI, Projected3dROI
 from glue.core.subset import RoiSubsetState
 from glue.config import viewer_tool
 from glue.viewers.common.tool import Tool, CheckableTool
@@ -212,6 +212,44 @@ class BqplotCircleMode(InteractCheckableTool):
             self.interact.selected_x = None
             self.interact.selected_y = None
         super().activate()
+
+
+@viewer_tool
+class BqplotEllipseMode(BqplotCircleMode):
+
+    icon = 'glue_lasso'
+    tool_id = 'bqplot:ellipse'
+    action_text = 'Elliptical ROI'
+    tool_tip = 'Define an elliptical region of interest'
+
+    selector = 'ellipse'
+
+    def __init__(self, viewer, **kwargs):
+
+        super().__init__(viewer, **kwargs)
+
+    def update_selection(self, *args):
+        if self.interact.brushing:
+            return
+        with self.viewer._output_widget:
+            if self.interact.selected_x is not None and self.interact.selected_y is not None:
+                x = self.interact.selected_x
+                y = self.interact.selected_y
+                # similar to https://github.com/glue-viz/glue/blob/b14ccffac6a5
+                # 271c2869ead9a562a2e66232e397/glue/core/roi.py#L1275-L1297
+                # We should now check if the radius in data coordinates is the same
+                # along x and y, as if so then we can return a circle, otherwise we
+                # should return an ellipse.
+                rx = abs(x[1] - x[0])/2
+                ry = abs(y[1] - y[0])/2
+                xc = x.max() - rx
+                yc = y.max() - ry
+                # We use a tolerance of 1e-2 below to match the tolerance set in glue-core
+                # https://github.com/glue-viz/glue/blob/6b968b352bc5ad68b95ad5e3bb25550782a69ee8/glue/viewers/matplotlib/state.py#L198
+                roi = EllipticalROI(xc=xc, yc=yc, radius_x=rx, radius_y=ry)
+                self.viewer.apply_roi(roi)
+                if self.finalize_callback is not None:
+                    self.finalize_callback()
 
 
 @viewer_tool
